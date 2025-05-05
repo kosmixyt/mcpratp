@@ -367,13 +367,8 @@ server.tool(
 async function main() {
   cycletls = await initCycleTLS.default();
   await InitializeCloudflareBaseCache();
-  // const transport = new StdioServerTransport();
-  // await server.connect(transport);
-  const service = new BusService();
-  const ligne = await service.getLigne(360);
-  const arrets = await service.getArrets(ligne);
-  console.log("Ligne:", ligne);
-  console.log("Arrets:", arrets);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
 }
 
 exitHook(() => {
