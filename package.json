@@ -1,0 +1,25 @@
+{
+  "name": "ratp-mcp-service",
+  "version": "1.0.0",
+  "description": "RATP bus information service for AI using MCP protocol",
+  "main": "main.ts",
+  "type": "module",
+  "scripts": {
+    "start": "node main.js",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "cycletls": "^1.0.27",
+    "exit-hook": "^4.0.0",
+    "form-data": "^4.0.2",
+    "node-fetch": "^3.3.2",
+    "node-html-parser": "^6.1.13",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.10.5",
+    "typescript": "^5.3.3"
+  }
+}
