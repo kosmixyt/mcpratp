@@ -3,6 +3,7 @@
 # Logs
 .env
 logs
+docker-compose.yaml
 _.log
 npm-debug.log_
 yarn-debug.log*

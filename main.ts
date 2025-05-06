@@ -60,8 +60,12 @@ class BusService {
   async getLigne(ligne: number): Promise<Ligne> {
     const url = `https://www.ratp.fr/horaires/api/getLinesAutoComplete/busnoctilien/${ligne}?to=fo&cache=true`;
     const resp = await this.getCloudflare(url);
-
-    const json = JSON.parse(resp) as any[];
+    try {
+      var json = JSON.parse(resp) as any[];
+    } catch (e) {
+      console.error("Error parsing JSON:", e);
+      console.error(resp);
+    }
     if (!json || json.length !== 1) {
       throw new Error(`Line not found: ${ligne}`);
     }
@@ -80,7 +84,13 @@ class BusService {
   async getArrets(ligne: Ligne): Promise<Arret[]> {
     const url = `https://www.ratp.fr/horaires/api/getStopPoints/busratp/${ligne.nombre}/${ligne.id}`;
     const resp = await this.getCloudflare(url);
-    const json = JSON.parse(resp) as any[];
+    var json: any[] = [];
+    try {
+      json = JSON.parse(resp) as any[];
+    } catch (e) {
+      console.error("Error parsing JSON:", e);
+      console.error(resp);
+    }
     const arrets: Arret[] = [];
     for (const arret of json) {
       arrets.push({
@@ -163,7 +173,11 @@ class BusService {
     if (resp.includes("Just a moment...")) {
       throw new Error("Cloudflare protection detected in response");
     }
-    const json = JSON.parse(resp);
+    try {
+      var json = JSON.parse(resp);
+    } catch (e) {
+      console.error(resp);
+    }
     return json.perturbation || null;
   }
 
@@ -175,7 +189,7 @@ class BusService {
           body: "",
           cookies: globalCloudflareCookies,
           userAgent: globalCloudflareUserAgent,
-          ja3: "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0",
+          ja3: "772,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,17613-5-11-65037-0-65281-23-35-13-16-43-45-27-10-18-51,4588-29-23-24,0",
         });
         var out = response.body;
         if (typeof out != "string") {
