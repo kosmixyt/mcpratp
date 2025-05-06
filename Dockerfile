@@ -4,7 +4,7 @@ FROM debian:bookworm
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
-    curl unzip ca-certificates  \
+    curl unzip ca-certificates gettext \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Bun
@@ -23,9 +23,13 @@ ENV GOOS=linux
 WORKDIR /app
 
 COPY . .
+COPY openapi.yaml /app/openapi.yaml
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 RUN bun install \
     && chmod +x node_modules/cycletls/dist/index
 
 ENV NODE_ENV=production
-CMD ["bun", "main.ts"]
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["bun", "run", "/app/main.ts"]

@@ -59,22 +59,21 @@ components:
           description: Stop status
     Schedule:
       type: object
-      additionalProperties:
-        type: object
-        properties:
-          passages:
-            type: array
-            items:
-              type: string
-            description: Upcoming passage times
-          premier:
+      additionalProperties: false
+      properties:
+        passages:
+          type: array
+          items:
             type: string
-            nullable: true
-            description: First service of the day
-          dernier:
-            type: string
-            nullable: true
-            description: Last service of the day
+          description: Upcoming passage times
+        premier:
+          type: string
+          nullable: true
+          description: First service of the day
+        dernier:
+          type: string
+          nullable: true
+          description: Last service of the day
     LineStatus:
       type: object
       properties:
