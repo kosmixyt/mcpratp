@@ -6,11 +6,13 @@ import { z } from "zod";
 import { parse as parseHTML } from "node-html-parser";
 import initCycleTLS, { CycleTLSClient } from "cycletls";
 import { CloudflareResponse, Ligne, Arret, HoraireResult } from "./type.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import exitHook from "exit-hook";
 import { config } from "dotenv";
+import express from "express";
+import { randomUUID } from "node:crypto";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
-config({})
+config({});
 // Global cookies and user-agent for Cloudflare
 let cycletls: CycleTLSClient;
 let globalCloudflareCookies: Record<string, string> = {};
@@ -366,19 +368,134 @@ server.tool(
   }
 );
 
+// Express app setup
+const app = express();
+app.use(express.json());
+
+// Map to store transports by session ID
+const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
+
+// API Token Authentication Middleware
+const apiTokenAuth = (
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res
+      .status(401)
+      .json({ error: "Unauthorized: Missing or invalid API token" });
+  }
+  const token = authHeader.split(" ")[1];
+  if (token !== process.env.API_TOKEN) {
+    return res.status(403).json({ error: "Forbidden: Invalid API token" });
+  }
+  next();
+};
+
+// @ts-ignore
+app.use("/mcp", apiTokenAuth); // Apply API token auth to /mcp routes
+
+// Handle POST requests for client-to-server communication
+app.post("/mcp", async (req : express.Request, res : express.Response) => {
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+  let transport: StreamableHTTPServerTransport;
+
+  if (sessionId && transports[sessionId]) {
+    transport = transports[sessionId];
+  } else if (!sessionId && isInitializeRequest(req.body)) {
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (newSessionId) => {
+        transports[newSessionId] = transport;
+        console.log(`Session initialized: ${newSessionId}`);
+      },
+    });
+
+    transport.onclose = () => {
+      if (transport.sessionId && transports[transport.sessionId]) {
+        console.log(`Session closed: ${transport.sessionId}`);
+        delete transports[transport.sessionId];
+      }
+    };
+
+    // Connect the existing McpServer instance to this new transport
+    // The server instance is defined globally above
+    await server.connect(transport);
+  } else {
+    res.status(400).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message:
+          "Bad Request: No valid session ID provided or not an initialization request.",
+      },
+      id: req.body?.id || null,
+    });
+    return;
+  }
+
+  await transport.handleRequest(req, res, req.body);
+});
+
+// Reusable handler for GET and DELETE requests
+const handleSessionRequest = async (
+  req: express.Request,
+  res: express.Response
+) => {
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+  if (!sessionId || !transports[sessionId]) {
+    res.status(400).send("Invalid or missing session ID");
+    return;
+  }
+
+  const transport = transports[sessionId];
+  await transport.handleRequest(req, res);
+};
+
+// Handle GET requests for server-to-client notifications via SSE
+app.get("/mcp", handleSessionRequest);
+
+// Handle DELETE requests for session termination
+app.delete("/mcp", handleSessionRequest);
+
 async function main() {
-  cycletls = await initCycleTLS();
+  if (!process.env.API_TOKEN) {
+    console.error(
+      "API_TOKEN environment variable is not set. Please set it before running the server."
+    );
+    process.exit(1);
+  }
+
+  const portValue = process.env.PORT;
+  if (!portValue) {
+    console.error("PORT environment variable is not set. Please set it before running the server.");
+    process.exit(1);
+  }
+
+  const portNumber = parseInt(portValue, 10);
+  if (isNaN(portNumber) || portNumber <= 0 || portNumber > 65535) {
+    console.error(`Invalid PORT environment variable: "${portValue}". Must be a whole number between 1 and 65535.`);
+    process.exit(1);
+  }
+
+  cycletls = await initCycleTLS.default();
   await InitializeCloudflareBaseCache();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+
+  app.listen(portNumber, () => {
+    console.log(`MCP server listening on port ${portNumber}`);
+    console.log(
+      `RATP Bus Info server ready. Use POST /mcp to initialize a session.`
+    );
+  });
 }
 
-exitHook(() => {
-  console.log("Exiting...");
-  cycletls.exit().then(() => {
-    console.log("CycleTLS exited");
-  });
+// Removed exitHook logic as server lifecycle is managed by express
+main().catch((err) => {
+  console.error("Failed to start server:", err);
+  if (cycletls) {
+    cycletls.exit().then(() => console.log("CycleTLS exited due to error."));
+  }
+  process.exit(1);
 });
-main();
-
-  // var __dirname = path.join(path.resolve(), "node_modules", "cycletls", "dist");
