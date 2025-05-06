@@ -4,13 +4,15 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { parse as parseHTML } from "node-html-parser";
-import initCycleTLS from "cycletls";
+import initCycleTLS, { CycleTLSClient } from "cycletls";
 import { CloudflareResponse, Ligne, Arret, HoraireResult } from "./type.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import exitHook from "exit-hook";
+import { config } from "dotenv";
 
+config({})
 // Global cookies and user-agent for Cloudflare
-let cycletls: initCycleTLS.CycleTLSClient;
+let cycletls: CycleTLSClient;
 let globalCloudflareCookies: Record<string, string> = {};
 let globalCloudflareUserAgent: string = "";
 
@@ -238,7 +240,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${error.message}` }] };
+      return { content: [{ type: "text", text: `Error: ${String(error)}` }] };
     }
   }
 );
@@ -290,7 +292,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${error.message}` }] };
+      return { content: [{ type: "text", text: `Error: ${String(error)}` }] };
     }
   }
 );
@@ -314,7 +316,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${error.message}` }] };
+      return { content: [{ type: "text", text: `Error: ${String(error)}` }] };
     }
   }
 );
@@ -359,21 +361,16 @@ server.tool(
         ],
       };
     } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${error.message}` }] };
+      return { content: [{ type: "text", text: `Error: ${String(error)}` }] };
     }
   }
 );
 
 async function main() {
-  cycletls = await initCycleTLS.default();
+  cycletls = await initCycleTLS();
   await InitializeCloudflareBaseCache();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  // const service = new BusService();
-  // const ligne = await service.getLigne(144);
-  // const arrets = await service.getArrets(ligne);
-  // console.log("Ligne:", ligne);
-  // console.log("Arrets:", arrets);
 }
 
 exitHook(() => {
@@ -383,3 +380,5 @@ exitHook(() => {
   });
 });
 main();
+
+  // var __dirname = path.join(path.resolve(), "node_modules", "cycletls", "dist");

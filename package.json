@@ -1,16 +1,23 @@
 {
   "name": "ratp-mcp-service",
-  "version": "1.0.0",
+  "version": "1.0.11",
   "description": "RATP bus information service for AI using MCP protocol",
   "main": "main.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kosmixyt/mcpratp"
+  },
   "type": "module",
   "scripts": {
     "start": "node main.js",
-    "build": "tsc"
+    "build": "tsc",
+    "clean": "del dist .tsbuildinfo"
   },
+  "bin": "./cli.js",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",
     "cycletls": "^1.0.27",
+    "dotenv": "^16.5.0",
     "exit-hook": "^4.0.0",
     "form-data": "^4.0.2",
     "node-fetch": "^3.3.2",
@@ -20,6 +27,6 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^20.10.5",
-    "typescript": "^5.3.3"
+    "typescript": "^5.8.3"
   }
 }
