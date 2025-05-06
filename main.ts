@@ -9,6 +9,7 @@ import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
 import swaggerUi from "swagger-ui-express";
+import { createClient } from "@supabase/supabase-js";
 
 config({});
 
@@ -16,6 +17,14 @@ config({});
 let cycletls: initCycleTLS.CycleTLSClient;
 let globalCloudflareCookies: Record<string, string> = {};
 let globalCloudflareUserAgent: string = "";
+
+// Global variable to disable authentication
+const DISABLE_AUTH = process.env.DISABLE_AUTH === "true";
+
+// Initialise le client Supabase
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function InitializeCloudflareBaseCache() {
   const baseApi = process.env.BASE_API;
@@ -212,15 +221,38 @@ const openapiPath = path.join(__dirname, "openapi.yaml");
 const openapiSpec = yaml.load(fs.readFileSync(openapiPath, "utf8"));
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapiSpec as any));
 
-// Auth middleware
-const authenticate = (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers["auth-token"];
-  const apiKey = process.env.API_KEY;
+// Endpoint to expose OpenAPI YAML as JSON
+app.get("/openapi.json", (req: Request, res: Response) => {
+  res.json(openapiSpec);
+});
 
-  if (!token || token !== apiKey) {
-    return res.status(401).json({ error: "Unauthorized: Invalid Auth-Token" });
+// Auth middleware
+const authenticate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  if (DISABLE_AUTH) {
+    return next();
+  }
+  const token = req.headers["auth-token"];
+  if (!token || typeof token !== "string") {
+    return res.status(401).json({ error: "Unauthorized: Missing Auth-Token" });
   }
 
+  // Vérifie le JWT avec Supabase
+  console.log("Token:", token);
+
+  const { data, error } = await supabase
+    .from("api_keys")
+    .select("token_hash") // removed auth.users(*)
+    .eq("token_hash", token)
+    .eq("is_active", true)
+    .single();
+  if (error) {
+    console.log("Error fetching token:", error);
+    return res.status(401).json({ error: "Unauthorized: Invalid Auth-Token" });
+  }
   next();
 };
 
