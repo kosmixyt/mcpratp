@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ratp": {
+      "command": "docker",
+      "args": ["run", "-it", "-v", "/ratp/.env:/app/.env", "kosmix/mcratp"]
+    }
+  }
+}
