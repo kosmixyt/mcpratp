@@ -367,8 +367,11 @@ server.tool(
 );
 
 async function main() {
+console.log("Starting RATP Bus Info server...");
   cycletls = await initCycleTLS.default();
+  console.log("CycleTLS initialized");
   await InitializeCloudflareBaseCache();
+  console.log("Cloudflare base cache initialized");
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
