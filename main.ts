@@ -1,16 +1,17 @@
-import {
-  McpServer,
-  ResourceTemplate,
-} from "@modelcontextprotocol/sdk/server/mcp.js";
+import express, { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { parse as parseHTML } from "node-html-parser";
 import initCycleTLS from "cycletls";
 import { CloudflareResponse, Ligne, Arret, HoraireResult } from "./type.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import exitHook from "exit-hook";
 import { config } from "dotenv";
+import fs from "fs";
+import path from "path";
+import yaml from "js-yaml";
+import swaggerUi from "swagger-ui-express";
 
-config({})
+config({});
+
 // Global cookies and user-agent for Cloudflare
 let cycletls: initCycleTLS.CycleTLSClient;
 let globalCloudflareCookies: Record<string, string> = {};
@@ -198,63 +199,77 @@ class BusService {
   }
 }
 
-// MCP server and tools
-const server = new McpServer({
-  name: "RATP Bus Info",
-  version: "1.0.0",
-});
-
+// Create Express app
+const app = express();
+const port = process.env.PORT || 3000;
 const busService = new BusService();
 
-server.tool(
-  "getBusLine",
-  {
-    lineNumber: z.number().int().positive(),
-  },
-  async ({ lineNumber }) => {
-    try {
-      const ligne = await busService.getLigne(lineNumber);
-      const arrets = await busService.getArrets(ligne);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                nom: ligne.nom,
-                id: ligne.id,
-                nombre: ligne.nombre,
-                picto: ligne.picto,
-                plan: ligne.plan,
-                pdfplan: ligne.pdfplan,
-                arrets: arrets.map((a) => ({
-                  status: a.status,
-                  name: a.name,
-                  id: a.id,
-                })),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${String(error)}` }] };
-    }
-  }
-);
+// Middleware for JSON parsing
+app.use(express.json());
 
-server.tool(
-  "getBusStopSchedule",
-  {
-    lineNumber: z.number().int().positive(),
-    stopId: z.string(),
-    date: z.string().optional(),
-    time: z.string().optional(),
-  },
-  async ({ lineNumber, stopId, date, time }) => {
+// Serve OpenAPI YAML at /docs with Swagger UI
+const openapiPath = path.join(__dirname, "openapi.yaml");
+const openapiSpec = yaml.load(fs.readFileSync(openapiPath, "utf8"));
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapiSpec as any));
+
+// Auth middleware
+const authenticate = (req: Request, res: Response, next: NextFunction) => {
+  const token = req.headers["auth-token"];
+  const apiKey = process.env.API_KEY;
+
+  if (!token || token !== apiKey) {
+    return res.status(401).json({ error: "Unauthorized: Invalid Auth-Token" });
+  }
+
+  next();
+};
+
+// Apply auth middleware to all API routes
+app.use("/api", authenticate);
+
+app.get("/api/bus/line/:lineNumber", async (req: Request, res: Response) => {
+  try {
+    const lineNumber = parseInt(req.params.lineNumber);
+    if (isNaN(lineNumber) || lineNumber <= 0) {
+      return res.status(400).json({ error: "Invalid line number" });
+    }
+
+    const ligne = await busService.getLigne(lineNumber);
+    const arrets = await busService.getArrets(ligne);
+
+    res.json({
+      nom: ligne.nom,
+      id: ligne.id,
+      nombre: ligne.nombre,
+      picto: ligne.picto,
+      plan: ligne.plan,
+      pdfplan: ligne.pdfplan,
+      arrets: arrets.map((a) => ({
+        status: a.status,
+        name: a.name,
+        id: a.id,
+      })),
+    });
+  } catch (error) {
+    res
+      .status(String(error).includes("Line not found") ? 404 : 500)
+      .json({ error: String(error) });
+  }
+});
+
+app.get(
+  "/api/bus/line/:lineNumber/stop/:stopId/schedule",
+  async (req: Request, res: Response) => {
     try {
+      const lineNumber = parseInt(req.params.lineNumber);
+      const stopId = req.params.stopId;
+      const date = req.query.date as string | undefined;
+      const time = req.query.time as string | undefined;
+
+      if (isNaN(lineNumber) || lineNumber <= 0) {
+        return res.status(400).json({ error: "Invalid line number" });
+      }
+
       const currentDate = new Date();
       const formattedDate =
         date ||
@@ -266,114 +281,98 @@ server.tool(
         `${String(currentDate.getHours()).padStart(2, "0")}:${String(
           currentDate.getMinutes()
         ).padStart(2, "0")}`;
+
       const ligne = await busService.getLigne(lineNumber);
       const arret = await busService.getArretById(ligne, stopId);
+
       if (!arret) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Stop ID ${stopId} not found for line ${lineNumber}`,
-            },
-          ],
-        };
+        return res.status(404).json({
+          error: `Stop ID ${stopId} not found for line ${lineNumber}`,
+        });
       }
       const horaires = await busService.getHoraire(
         arret,
         formattedDate,
         formattedTime
       );
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(horaires, null, 2),
-          },
-        ],
-      };
+      res.json(horaires);
     } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${String(error)}` }] };
+      res.status(500).json({ error: String(error) });
     }
   }
 );
 
-server.tool(
-  "getBusLineStatus",
-  {
-    lineNumber: z.number().int().positive(),
-  },
-  async ({ lineNumber }) => {
+app.get(
+  "/api/bus/line/:lineNumber/status",
+  async (req: Request, res: Response) => {
     try {
+      const lineNumber = parseInt(req.params.lineNumber);
+      if (isNaN(lineNumber) || lineNumber <= 0) {
+        return res.status(400).json({ error: "Invalid line number" });
+      }
+
       const perturbation = await busService.getPerturbation(lineNumber);
-      return {
-        content: [
-          {
-            type: "text",
-            text: perturbation
-              ? JSON.stringify(perturbation, null, 2)
-              : "No perturbations reported",
-          },
-        ],
-      };
+      res.json({
+        status: perturbation ? "disrupted" : "normal",
+        perturbation: perturbation || "No perturbations reported",
+      });
     } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${String(error)}` }] };
+      res.status(500).json({ error: String(error) });
     }
   }
 );
 
-server.tool(
-  "searchBusStopByName",
-  {
-    lineNumber: z.number().int().positive(),
-    stopName: z.string(),
-  },
-  async ({ lineNumber, stopName }) => {
+app.get(
+  "/api/bus/line/:lineNumber/stops/search",
+  async (req: Request, res: Response) => {
     try {
+      const lineNumber = parseInt(req.params.lineNumber);
+      const stopName = req.query.name as string;
+
+      if (isNaN(lineNumber) || lineNumber <= 0) {
+        return res.status(400).json({ error: "Invalid line number" });
+      }
+
+      if (!stopName) {
+        return res.status(400).json({ error: "Stop name is required" });
+      }
+
       const ligne = await busService.getLigne(lineNumber);
       await busService.getArrets(ligne);
       const matchingStops = ligne.arrets.filter((arret) =>
         arret.name.toLowerCase().includes(stopName.toLowerCase())
       );
+
       if (matchingStops.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `No stops found matching "${stopName}" for line ${lineNumber}`,
-            },
-          ],
-        };
+        return res.status(404).json({
+          error: `No stops found matching "${stopName}" for line ${lineNumber}`,
+        });
       }
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              matchingStops.map((a) => ({
-                id: a.id,
-                name: a.name,
-                status: a.status,
-              })),
-              null,
-              2
-            ),
-          },
-        ],
-      };
+
+      res.json(
+        matchingStops.map((a) => ({
+          id: a.id,
+          name: a.name,
+          status: a.status,
+        }))
+      );
     } catch (error) {
-      return { content: [{ type: "text", text: `Error: ${String(error)}` }] };
+      res.status(500).json({ error: String(error) });
     }
   }
 );
 
 async function main() {
-console.log("Starting RATP Bus Info server...");
+  console.log("Starting RATP Bus Info API server...");
   cycletls = await initCycleTLS.default();
   console.log("CycleTLS initialized");
   await InitializeCloudflareBaseCache();
   console.log("Cloudflare base cache initialized");
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+
+  app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+    console.log(`API documentation available at http://localhost:${port}/docs`);
+  });
 }
 
 exitHook(() => {
@@ -382,4 +381,5 @@ exitHook(() => {
     console.log("CycleTLS exited");
   });
 });
+
 main();

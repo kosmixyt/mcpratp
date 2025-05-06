@@ -1,34 +1,33 @@
 {
-  "name": "ratp-mcp-service",
-  "version": "1.0.11",
-  "description": "RATP bus information service for AI using MCP protocol",
-  "main": "main.ts",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kosmixyt/mcpratp"
-  },
+  "name": "ratp-bus-api",
+  "version": "1.0.0",
+  "description": "API for accessing RATP bus information",
+  "main": "dist/main.js",
   "type": "module",
   "scripts": {
-    "start": "node main.js",
     "build": "tsc",
-    "clean": "del dist .tsbuildinfo"
+    "start": "node dist/main.js",
+    "dev": "ts-node-esm main.ts"
   },
-  "bin": "./cli.js",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.11.0",
-    "@types/express": "^5.0.1",
-    "cycletls": "^1.0.27",
-    "dotenv": "^16.5.0",
-    "exit-hook": "^4.0.0",
-    "express": "^5.1.0",
+    "cycletls": "^1.0.21",
+    "dotenv": "^16.3.1",
+    "exit-hook": "^3.2.0",
+    "express": "^4.18.2",
     "form-data": "^4.0.2",
-    "node-fetch": "^3.3.2",
-    "node-html-parser": "^6.1.13",
-    "zod": "^3.24.4"
+    "js-yaml": "^4.1.0",
+    "node-html-parser": "^6.1.10",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/node": "^20.10.5",
-    "typescript": "^5.8.3"
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.10.4",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.6",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.2"
   }
 }
