@@ -1,0 +1,22 @@
+
+
+GET http://localhost:8565/api/tram/list
+Accept: application/json
+auth-token: cocasse
+
+
+####
+GET http://localhost:8565/api/tram/line/t2
+auth-token: cocasse
+Accept: application/json
+####
+GET http://localhost:8565/api/tram/line/t2/status
+auth-token: cocasse
+Accept: application/json
+####
+
+
+###
+GET http://localhost:8565/api/tram/line/LIG:IDFM:C01390/ART:IDFM:42315/schedule
+auth-token: cocasse
+Accept: application/json

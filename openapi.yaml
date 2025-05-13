@@ -1,0 +1,271 @@
+openapi: 3.0.0
+info:
+  title: RATP Bus Info API
+  version: "1.0.0"
+  description: API for accessing RATP bus information
+
+servers:
+  - url: http://localhost:8565
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Auth-Token
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+    BusLine:
+      type: object
+      properties:
+        nom:
+          type: string
+          description: Line name
+        id:
+          type: string
+          description: Line ID
+        nombre:
+          type: integer
+          description: Line number
+        picto:
+          type: string
+          description: URL to line pictogram
+        plan:
+          type: string
+          description: URL to line map (PNG)
+        pdfplan:
+          type: string
+          description: URL to line map (PDF)
+        arrets:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusStop'
+    BusStop:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Stop ID
+        name:
+          type: string
+          description: Stop name
+        status:
+          type: string
+          description: Stop status
+    Schedule:
+      type: object
+      additionalProperties: false
+      properties:
+        passages:
+          type: array
+          items:
+            type: string
+          description: Upcoming passage times
+        premier:
+          type: string
+          nullable: true
+          description: First service of the day
+        dernier:
+          type: string
+          nullable: true
+          description: Last service of the day
+    LineStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [normal, disrupted]
+          description: Current status of the line
+        perturbation:
+          type: string
+          description: Details about any ongoing perturbations
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Bus Lines
+  - name: Schedules
+  - name: Status
+  - name: Bus Stops
+
+paths:
+  /api/bus/line/{lineNumber}:
+    get:
+      summary: Get information about a bus line
+      tags: [Bus Lines]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: lineNumber
+          required: true
+          schema:
+            type: integer
+          description: Bus line number
+      responses:
+        200:
+          description: Bus line information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusLine'
+        400:
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Line not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/bus/line/{lineNumber}/stop/{stopId}/schedule:
+    get:
+      summary: Get bus stop schedule
+      tags: [Schedules]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: lineNumber
+          required: true
+          schema:
+            type: integer
+          description: Bus line number
+        - in: path
+          name: stopId
+          required: true
+          schema:
+            type: string
+          description: Bus stop ID
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+          description: Date for schedule (YYYY-MM-DD)
+        - in: query
+          name: time
+          schema:
+            type: string
+          description: Time for schedule (HH:MM)
+      responses:
+        200:
+          description: Bus schedule information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        400:
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Stop not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/bus/line/{lineNumber}/status:
+    get:
+      summary: Get bus line status and perturbations
+      tags: [Status]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: lineNumber
+          required: true
+          schema:
+            type: integer
+          description: Bus line number
+      responses:
+        200:
+          description: Bus line status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineStatus'
+        400:
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/bus/line/{lineNumber}/stops/search:
+    get:
+      summary: Search bus stops by name
+      tags: [Bus Stops]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: lineNumber
+          required: true
+          schema:
+            type: integer
+          description: Bus line number
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+          description: Stop name to search for
+      responses:
+        200:
+          description: List of matching stops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BusStop'
+        400:
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: No stops found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
